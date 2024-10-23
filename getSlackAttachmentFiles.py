@@ -105,6 +105,28 @@ class Client:
 
         return replies
 
+    def fetch_canvas(self, channel_id: str):
+        """指定したチャンネルの添付ファイル情報をすべて取得する
+        References:
+            - https://api.slack.com/methods/files.list
+        """
+        canvases = []
+        next_cursor = None
+        while True:
+            params = {"channel": channel_id, "types": "canvas"}
+            if next_cursor:
+                params["cursor"] = next_cursor
+
+            response = self._call("https://slack.com/api/files.list", params=params)
+            canvases += response["files"]
+
+            if (response["paging"]["pages"] > 1):
+                next_cursor = response["response_metadata"]["next_cursor"]
+            else:
+                break
+
+        return canvases
+
     def get_file(self,url):
         response = self._session.get(url, headers=self._headers, timeout=3)
         return response
@@ -154,6 +176,20 @@ def main(TOKEN: str,attachment_files_dir: Path,output_format: Literal["json", "j
                             logger.info(f"file: {filename=}")
                         time.sleep(1)
         logger.info(f"{len(messages_and_replies)} messages/replies fetched")
+
+        canvases = client.fetch_canvas(channel_id)
+        for canvas in canvases:
+            canvas_id = canvas['id']
+            download_url = canvas['url_private_download']
+            response = client.get_file(download_url)
+            canvas_title = canvas['title']
+            filename = f"./{attachment_files_dir}/{channel_id}_{canvas_id}_{canvas_title}.html"
+            with open(filename, 'wb') as f:
+                f.write(response.content)
+                logger.info(f"file: {filename=}")
+            time.sleep(1)
+        logger.info(f"{len(canvases)} canvases fetched")
+        
     print('end')
 
 
